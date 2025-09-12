@@ -1,0 +1,14 @@
+# 强制所有文本文件使用 LF 换行符
+* text=auto eol=lf
+
+# 明确指定某些文件类型
+*.js text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+
+# 二进制文件不需要转换
+*.png binary
+*.jpg binary
+*.ico binary
