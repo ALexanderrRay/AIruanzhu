@@ -9,7 +9,7 @@ const { analyzeDocumentWithAI } = require('./ai-service');
 // 创建窗口函数
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1000,
+    width: 1500,
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, '../preload.js'), // 安全通信脚本
@@ -22,7 +22,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '../renderer/pages/home.html'));
 
   // 打开开发者工具（调试用，上线前删除）
-  //win.webContents.openDevTools();
+  win.webContents.openDevTools();
 }
 
 // Electron初始化完成后创建窗口
