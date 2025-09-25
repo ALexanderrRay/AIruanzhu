@@ -28,17 +28,6 @@ async function handleFileSelect(event) {
     setLoadingState(true);
     document.getElementById('infoReview').innerHTML = '<p>正在分析文档...</p>';
 
-    // TODO: 这里后续调用AI解析文档
-    // 模拟解析结果（实际开发时替换为AI接口调用）
-    /*setTimeout(() => {
-        const mockData = {
-            softwareName: "智能文档分析系统",
-            version: "v1.0",
-            developer: "XX科技有限公司"
-        };
-        showReviewForm(mockData);
-    }, 1500);*/
-
     try {
     // 调用主进程分析文档
     const result = await window.electronAPI.analyzeDocument(file.path);
@@ -58,63 +47,73 @@ async function handleFileSelect(event) {
 
 
 function showReviewForm(data) {
-    let html = `nom
+    let html = `
         <h2>请确认以下信息</h2>
-        <table border="1" cellpadding="5">
-            <tr><th>字段</th><th>值</th><th>操作</th></tr>
+        <form id="reviewForm">
+            <table border="1" cellpadding="5">
+                <tr><th>字段</th><th>值</th></tr>
     `;
-
     Object.entries(data).forEach(([key, value]) => {
+        // 处理默认值：如果值为null或空，且字段是version，设置默认值"v1.0"
+        let displayValue = value;
+        if (value === null || value === '') {
+            if (key === 'version') {
+                displayValue = 'v1.0';
+            } else {
+                displayValue = '';
+            }
+        }
         html += `
             <tr>
                 <td>${key}</td>
-                <td>${value}</td>
-                <td><button onclick="editField('${key}')">修改</button></td>
+                <td><input type="text" id="${key}" value="${displayValue}" /></td>
             </tr>
         `;
     });
-
-    html += `</table>`;
+    html += `</table></form>`;
     document.getElementById('infoReview').innerHTML = html;
     document.getElementById('generateBtn').disabled = false;
 }
+
+//用于从表单中收集用户输入的数据
+function collectFormData() {
+    const form = document.getElementById('reviewForm');
+    const inputs = form.querySelectorAll('input');
+    const data = {};
+    inputs.forEach(input => {
+        data[input.id] = input.value;
+    });
+    return data;
+}
+
+//在用户界面上显示完整的主表
+function displayMainTable(data) {
+    let html = `<h2>生成的主表</h2><table border="1" cellpadding="5"><tr><th>字段</th><th>值</th></tr>`;
+    Object.entries(data).forEach(([key, value]) => {
+        html += `<tr><td>${key}</td><td>${value}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('infoReview').innerHTML = html;
+}
+
 // 生成文档函数
 async function generateDocuments() {
     // 显示生成中状态
     setLoadingState(true);
-    //document.getElementById('generateBtn').textContent = '生成中...';
-    //document.getElementById('generateBtn').disabled = true;
 
 try {
     // 收集确认后的数据
     const formData = collectFormData();
-    
-    // 调用主进程生成并保存文档
-    const result = await window.electronAPI.saveDocument({
-      content: "这是生成的软著文档内容", // 实际开发时替换为AI生成的内容
-      filename: "软著说明书.docx"
-    });
-    
-    if (result.success) {
-      alert(`文档已保存到：${result.path}`);
-    } else {
-      alert('保存失败：' + result.error);
+    displayMainTable(formData);// 显示主表
+        // 后续可以在这里添加保存到Word的逻辑，但暂时不处理
+        alert('生成完成！主表已显示。');
+    } catch (error) {
+        alert('生成失败：' + error.message);
+    } finally {
+        setLoadingState(false);
     }
-  } catch (error) {
-    alert('生成失败：' + error.message);
-  } finally {
-    setLoadingState(false);
-  }
 }
 
-function collectFormData() {
-  // 实际开发中实现从表单收集数据的逻辑
-  return {
-    softwareName: "智能文档分析系统",
-    version: "v1.0",
-    developer: "XX科技有限公司"
-  };
-}
 
 // 编辑字段函数（示例）
 function editField(fieldName) {

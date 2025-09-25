@@ -8,7 +8,7 @@ const axios = require('axios');
 async function analyzeDocumentWithAI(content) {
   try {
     // 构建系统提示词，指导AI如何分析文档
-    const systemPrompt = `你是一个专门分析技术文档提取软著申请信息的AI助手。请分析用户提供的技术文档，提取以下信息：
+    const systemPrompt = `你是一个专门分析技术文档提取软件著作权申请信息的AI助手。请分析用户提供的技术文档，提取以下信息：
     
 1. 软件全称
 2. 简称（如有）
@@ -22,8 +22,8 @@ async function analyzeDocumentWithAI(content) {
 10. 著作权人（如未提及则默认与开发者相同）
 
 请将提取到的信息组织成JSON格式返回，包含两个部分：
-- "mainTable": 包含所有已提取的信息（字段名使用中文）
-- "confirmationTable": 仅包含需要用户确认或补充的信息（标记出缺失或不确定的信息）
+- "mainTable": 包含所有要求的信息，其中未提取到的信息，如果有默认值则返回默认值，没有默认值的返回null（字段名使用中文）
+- "confirmationTable": 仅包含需要用户确认（默认值）或补充（null）的信息。
 
 对于不确定或文档中未明确提及的信息，请在confirmationTable中标注为"待确认"或使用合理的默认值。`;
 
