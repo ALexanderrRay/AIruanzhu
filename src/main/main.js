@@ -1,7 +1,9 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { extractTextFromDocx, extractTextFromDocxFromBuffer, isDocxFile } = require('./docx-processor');
 const path = require('path');
 const fs = require('fs');
 require('dotenv').config(); // 加载环境变量
+const DEBUG_MODE = true; // 调试模式开关，调试阶段设为true，完成后改为false
 
 // 导入API处理模块
 const { analyzeDocumentWithAI } = require('./ai-service');
@@ -45,15 +47,50 @@ ipcMain.handle('get-api-config', () => {
   };
 });
 
-// 处理文档分析请求
-ipcMain.handle('analyze-document', async (event, filePath) => {
+// 处理文档分析请求 修改0927 20：49：现在接受文件内容和文件名
+ipcMain.handle('analyze-document', async (event, fileContent, fileName) => {
   try {
-    // 读取文件内容
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    let extractedText;
+    const ext = path.extname(fileName).toLowerCase();
+    
+    // 根据文件类型处理内容
+    if (ext === '.docx') {
+      // fileContent 应该是 Buffer（从ArrayBuffer转换而来）
+      extractedText = await extractTextFromDocxFromBuffer(fileContent);
+    } else if (ext === '.txt' || ext === '.md') {
+      // fileContent 已经是字符串
+      extractedText = fileContent;
+    } else {
+      throw new Error(`不支持的文件格式: ${ext}. 请使用.docx或.txt文件`);
+    }
+    
+    // 检查内容是否为空
+    if (!extractedText || extractedText.trim().length === 0) {
+      throw new Error('文件内容为空或无法读取');
+    }
+    
+    console.log('成功读取文件内容，字符数:', extractedText.length);
     
     // 调用AI服务分析文档
-    const result = await analyzeDocumentWithAI(fileContent);
+    const result = await analyzeDocumentWithAI(extractedText);
     
+    // 调试模式：保存原始响应
+    if (DEBUG_MODE) {
+      const debugDir = path.join(__dirname, '../../debug');
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      const debugData = {
+        timestamp: new Date().toISOString(),
+        originalContent: extractedText, // 使用提取后的文本
+        aiResponse: result
+      };
+      fs.writeFileSync(
+        path.join(debugDir, `debug_${Date.now()}.json`),
+        JSON.stringify(debugData, null, 2)
+      );
+    }
+
     return { success: true, data: result };
   } catch (error) {
     console.error('文档分析失败:', error);
@@ -81,3 +118,32 @@ ipcMain.handle('save-document', async (event, { content, filename }) => {
   }
 });
 
+// 处理最终主表保存请求（用于调试）
+ipcMain.handle('save-final-main-table', async (event, finalMainTable) => {
+  try {
+    // 调试模式：保存最终主表
+    if (DEBUG_MODE) {
+      const debugDir = path.join(__dirname, '../../debug');
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      
+      const debugData = {
+        timestamp: new Date().toISOString(),
+        finalMainTable: finalMainTable
+      };
+      
+      fs.writeFileSync(
+        path.join(debugDir, `final_main_table_${Date.now()}.json`),
+        JSON.stringify(debugData, null, 2)
+      );
+      
+      console.log('最终主表已保存用于调试');
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('保存最终主表失败:', error);
+    return { success: false, error: error.message };
+  }
+});

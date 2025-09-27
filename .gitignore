@@ -5,7 +5,8 @@ node_modules/
 dist/
 out/
 build/
-output/  # 你生成的软著文档也不会被上传
+output/  # 生成的软著文档不会被上传
+debug/
 
 # 日志文件
 *.log

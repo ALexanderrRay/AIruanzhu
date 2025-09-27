@@ -1,8 +1,11 @@
+// preload.js
 const { contextBridge, ipcRenderer } = require('electron');
 
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
-  analyzeDocument: (filePath) => ipcRenderer.invoke('analyze-document', filePath),
-  saveDocument: (data) => ipcRenderer.invoke('save-document', data),
-    // 后续添加更多API...
+  analyzeDocument: (fileContent, fileName) => ipcRenderer.invoke('analyze-document', fileContent, fileName),
+  saveDocument: (content, filename) => ipcRenderer.invoke('save-document', { content, filename }),
+  getApiConfig: () => ipcRenderer.invoke('get-api-config'),
+  saveFinalMainTable: (finalMainTable) => ipcRenderer.invoke('save-final-main-table', finalMainTable),
+  // 后续添加更多API...
 });

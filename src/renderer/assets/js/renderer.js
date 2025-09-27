@@ -24,6 +24,16 @@ async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
 
+      // 检查文件类型
+    const allowedExtensions = ['.docx', '.txt', '.md'];
+    const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+  
+    if (!allowedExtensions.includes(fileExt)) {
+        alert('请选择.docx或.txt格式的文件');
+        event.target.value = ''; // 清空文件选择
+        return;
+    }
+    
     // 显示加载状态
     setLoadingState(true);
     document.getElementById('infoReview').innerHTML = '<p>正在分析文档...</p>';
@@ -46,44 +56,97 @@ async function handleFileSelect(event) {
 }
 
 
+// 修改showReviewForm函数 0927 19:47
 function showReviewForm(data) {
+    // 确保数据结构正确
+    const mainTable = data.mainTable || {};
+    const confirmationTable = data.confirmationTable || {};
+    
     let html = `
         <h2>请确认以下信息</h2>
-        <form id="reviewForm">
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('mainTab')">已提取信息</button>
+            <button class="tab-btn" onclick="showTab('confirmTab')">待确认信息</button>
+        </div>
+        
+        <div id="mainTab" class="tab-content active">
+            <h3>已提取的信息</h3>
             <table border="1" cellpadding="5">
-                <tr><th>字段</th><th>值</th></tr>
+                <tr><th>字段</th><th>值</th><th>状态</th></tr>
     `;
-    Object.entries(data).forEach(([key, value]) => {
-        // 处理默认值：如果值为null或空，且字段是version，设置默认值"v1.0"
-        let displayValue = value;
-        if (value === null || value === '') {
-            if (key === 'version') {
-                displayValue = 'v1.0';
-            } else {
-                displayValue = '';
-            }
+    
+    // 显示主表信息（已确认的）
+    Object.entries(mainTable).forEach(([key, value]) => {
+        if (value !== null && value !== '') {
+            html += `
+                <tr>
+                    <td>${key}</td>
+                    <td>${value}</td>
+                    <td>✅ 已确认</td>
+                </tr>
+            `;
         }
+    });
+    
+    html += `</table></div>
+        <div id="confirmTab" class="tab-content">
+            <h3>请确认或补充以下信息</h3>
+            <form id="reviewForm">
+            <table border="1" cellpadding="5">
+                <tr><th>字段</th><th>当前值/建议值</th><th>请输入确认值</th></tr>
+    `;
+    
+    // 显示待确认表信息
+    Object.entries(confirmationTable).forEach(([key, value]) => {
+        const defaultValue = value === null ? '' : value;
         html += `
             <tr>
                 <td>${key}</td>
-                <td><input type="text" id="${key}" value="${displayValue}" /></td>
+                <td>${defaultValue || '（需补充）'}</td>
+                <td><input type="text" id="confirm_${key}" value="${defaultValue}" /></td>
             </tr>
         `;
     });
-    html += `</table></form>`;
+    
+    html += `</table></form></div>`;
     document.getElementById('infoReview').innerHTML = html;
     document.getElementById('generateBtn').disabled = false;
+    
+    // 存储主表数据供后续使用
+    window.mainTableData = mainTable;
+}
+
+// 添加标签切换功能 0927 19:47
+function showTab(tabId) {
+    // 隐藏所有标签内容
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // 取消所有标签按钮的激活状态
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 显示选中的标签
+    document.getElementById(tabId).classList.add('active');
+    
+    // 激活对应的按钮
+    document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
 }
 
 //用于从表单中收集用户输入的数据
 function collectFormData() {
     const form = document.getElementById('reviewForm');
     const inputs = form.querySelectorAll('input');
-    const data = {};
+    const confirmedData = {};
+    
     inputs.forEach(input => {
-        data[input.id] = input.value;
+        const fieldName = input.id.replace('confirm_', '');
+        confirmedData[fieldName] = input.value;
     });
-    return data;
+    
+    return confirmedData;
 }
 
 //在用户界面上显示完整的主表
@@ -98,15 +161,23 @@ function displayMainTable(data) {
 
 // 生成文档函数
 async function generateDocuments() {
-    // 显示生成中状态
     setLoadingState(true);
 
-try {
-    // 收集确认后的数据
-    const formData = collectFormData();
-    displayMainTable(formData);// 显示主表
-        // 后续可以在这里添加保存到Word的逻辑，但暂时不处理
-        alert('生成完成！主表已显示。');
+    try {
+        // 收集确认后的数据
+        const confirmedData = collectFormData();
+        
+        // 合并到主表
+        const finalData = {
+            ...window.mainTableData,
+            ...confirmedData
+        };
+        
+        displayMainTable(finalData);
+        alert('生成完成！最终信息表已显示。');
+        
+        // 存储最终数据供后续使用
+        window.finalData = finalData;
     } catch (error) {
         alert('生成失败：' + error.message);
     } finally {

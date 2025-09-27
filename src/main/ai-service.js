@@ -6,6 +6,12 @@ const axios = require('axios');
  * @returns {Promise<Object>} 包含主表和待确认表的分析结果
  */
 async function analyzeDocumentWithAI(content) {
+  
+  // 在函数开头添加环境变量检查
+  if (!process.env.AI_SERVICE_URL || !process.env.API_KEY) {
+    throw new Error('缺少AI服务配置，请检查.env文件是否已正确设置');
+  }
+  
   try {
     // 构建系统提示词，指导AI如何分析文档
     const systemPrompt = `你是一个专门分析技术文档提取软件著作权申请信息的AI助手。请分析用户提供的技术文档，提取以下信息：
