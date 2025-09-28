@@ -2,11 +2,13 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const { extractTextFromDocx, extractTextFromDocxFromBuffer, isDocxFile } = require('./docx-processor');
 const path = require('path');
 const fs = require('fs');
+const { shell } = require('electron');
 require('dotenv').config(); // 加载环境变量
 const DEBUG_MODE = true; // 调试模式开关，调试阶段设为true，完成后改为false
 
 // 导入API处理模块
 const { analyzeDocumentWithAI } = require('./ai-service');
+const { generateManualWithAI } = require('./ai-service');
 
 // 创建窗口函数
 function createWindow() {
@@ -24,7 +26,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '../renderer/pages/home.html'));
 
   // 打开开发者工具（调试用，上线前删除）
-  win.webContents.openDevTools();
+  //win.webContents.openDevTools();
 }
 
 // Electron初始化完成后创建窗口
@@ -98,6 +100,31 @@ ipcMain.handle('analyze-document', async (event, fileContent, fileName) => {
   }
 });
 
+// 导入 document-generator 模块
+const { 
+  loadTemplate, 
+  generateCopyrightApplication, 
+  saveGeneratedDocument,
+  generateSoftwareManual,   
+  saveGeneratedManual       
+} = require('./document-generator');
+
+// 添加新的 IPC 处理程序 for generate-document
+ipcMain.handle('generate-document', async (event, finalData) => {
+  try {
+    // 加载模板文件（模板文件名为 '软件著作权申请表-模板.docx'）
+    const templateBuffer = await loadTemplate('软件著作权申请表-模板.docx');
+    // 生成文档
+    const docBuffer = await generateCopyrightApplication(templateBuffer, finalData);
+    // 保存文档，传递 finalData 对象以提取软件名称
+    const filePath = await saveGeneratedDocument(docBuffer, finalData);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('生成文档失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // 处理文件保存
 ipcMain.handle('save-document', async (event, { content, filename }) => {
   const outputDir = path.join(__dirname, '../../output');
@@ -114,6 +141,40 @@ ipcMain.handle('save-document', async (event, { content, filename }) => {
     return { success: true, path: filePath };
   } catch (error) {
     console.error('文件保存失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 生成完成后点击打开文件路径
+ipcMain.handle('open-file-location', async (event, filePath) => {
+  try {
+    // 确保文件存在
+    if (!fs.existsSync(filePath)) {
+      throw new Error('文件不存在: ' + filePath);
+    }
+    
+    // 打开文件所在文件夹并选中文件
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('打开文件位置失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 处理打开文件夹请求
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    // 确保路径存在
+    if (!fs.existsSync(folderPath)) {
+      throw new Error('文件夹不存在: ' + folderPath);
+    }
+    
+    // 使用 shell 打开文件夹
+    shell.openPath(folderPath);
+    return { success: true };
+  } catch (error) {
+    console.error('打开文件夹失败:', error);
     return { success: false, error: error.message };
   }
 });
@@ -147,3 +208,66 @@ ipcMain.handle('save-final-main-table', async (event, finalMainTable) => {
     return { success: false, error: error.message };
   }
 });
+
+// 生成说明书的IPC处理程序
+ipcMain.handle('generate-manual', async (event, { content, softwareInfo }) => {
+  try {
+    const result = await generateManualWithAI(content, softwareInfo);
+    
+    // 调试模式：保存生成的说明书内容
+    if (DEBUG_MODE) {
+      const debugDir = path.join(__dirname, '../../debug');
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      const debugData = {
+        timestamp: new Date().toISOString(),
+        softwareInfo: softwareInfo,
+        manualContent: result.manualContent
+      };
+      fs.writeFileSync(
+        path.join(debugDir, `manual_debug_${Date.now()}.json`),
+        JSON.stringify(debugData, null, 2)
+      );
+    }
+
+    return result;
+  } catch (error) {
+    console.error('生成说明书失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 添加生成完整文档集的IPC处理程序
+ipcMain.handle('generate-all-documents', async (event, { finalData, originalContent }) => {
+  try {
+    const results = {
+      applicationTable: null,
+      manual: null
+    };
+    
+    // 1. 生成软著申请表
+    const templateBuffer = await loadTemplate('软件著作权申请表-模板.docx');
+    const appDocBuffer = await generateCopyrightApplication(templateBuffer, finalData);
+    results.applicationTable = await saveGeneratedDocument(appDocBuffer, finalData);
+    
+    // 2. 生成软件说明书
+    const manualResult = await generateManualWithAI(originalContent, finalData);
+    if (manualResult.success) {
+      const manualData = {
+        ...finalData,
+        manualContent: manualResult.manualContent
+      };
+      const manualBuffer = await generateSoftwareManual(manualData);
+      results.manual = await saveGeneratedManual(manualBuffer, finalData);
+    } else {
+      throw new Error(manualResult.error);
+    }
+    
+    return { success: true, results };
+  } catch (error) {
+    console.error('生成完整文档集失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+

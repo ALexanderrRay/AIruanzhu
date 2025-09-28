@@ -253,6 +253,35 @@
             gap: 10px;
             margin-top: 10px;
         }
+        
+        /* 标签样式 */
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tab-btn {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: #666;
+        }
+        
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -264,17 +293,17 @@
         
         <div class="features">
             <div class="feature">
-                <div class="feature-icon">📄📄</div>
+                <div class="feature-icon">📄</div>
                 <h3>智能分析</h3>
                 <p>AI自动分析技术文档，提取软著申请所需信息</p>
             </div>
             <div class="feature">
-                <div class="feature-icon">🔍🔍</div>
+                <div class="feature-icon">🔍</div>
                 <h3>信息确认</h3>
                 <p>提供清晰的信息确认界面，确保数据准确无误</p>
             </div>
             <div class="feature">
-                <div class="feature-icon">🔒🔒</div>
+                <div class="feature-icon">🔒</div>
                 <h3>隐私保护</h3>
                 <p>本地化处理，确保您的技术资料不会泄露</p>
             </div>
@@ -295,21 +324,7 @@
 
         <!-- 信息确认区域（稍后动态填充） -->
         <div class="info-review" id="infoReview">
-            <h2>信息确认</h2>
-            <p>请确认以下提取的信息是否正确，如需修改请直接编辑</p>
-            <table class="review-table">
-                <thead>
-                    <tr>
-                        <th>信息类型</th>
-                        <th>提取内容</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="reviewTableBody">
-                    <!-- 动态生成 -->
-                </tbody>
-            </table>
-            <button class="btn btn-success" id="confirmBtn">确认信息并生成文档</button>
+            <!-- 内容将由JavaScript动态生成 -->
         </div>
         
         <!-- 加载动画 -->
@@ -320,29 +335,42 @@
 
         <!-- 生成按钮 -->
         <div style="text-align: center; margin: 30px 0;">
-            <button class="btn" id="generateBtn" disabled>生成软著材料</button>
+            <button class="btn" id="generateBtn" disabled>建立软著材料</button>
         </div>
     </div>
 
-<footer>
-    <p>© 2023 AI软著申请助手 | 保障您的知识产权安全</p>
-</footer>
+    <footer>
+        <p>© 2023 AI软著申请助手 | 保障您的知识产权安全</p>
+    </footer>
 
     <script>
-        // 简单的文件上传和UI交互逻辑
+        // 全局变量
+        let aiResponseData = null;
+        let userConfirmedData = {};
+        window.mainTableData = {};
+        
+        // DOM元素
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const fileInfo = document.getElementById('fileInfo');
+        const generateBtn = document.getElementById('generateBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const infoReview = document.getElementById('infoReview');
+        
+        // 初始化
         document.addEventListener('DOMContentLoaded', function() {
-            let aiResponseData = null; // 存储完整的AI响应数据
-            let userConfirmedData = {}; // 存储用户编辑后的确认数据
-            const fileInput = document.getElementById('fileInput');
-            const dropZone = document.getElementById('dropZone');
-            const fileInfo = document.getElementById('fileInfo');
-            const generateBtn = document.getElementById('generateBtn');
-            const loadingSpinner = document.getElementById('loadingSpinner');
-            const infoReview = document.getElementById('infoReview');
-            const confirmBtn = document.getElementById('confirmBtn');
-            const reviewTableBody = document.getElementById('reviewTableBody');
+            // 文件上传处理
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // 生成按钮事件监听
+            generateBtn.addEventListener('click', generateDocuments);
             
             // 拖放功能
+            setupDragAndDrop();
+        });
+        
+        // 设置拖放功能
+        function setupDragAndDrop() {
             dropZone.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 dropZone.classList.add('dragover');
@@ -358,210 +386,311 @@
                 
                 if (e.dataTransfer.files.length) {
                     fileInput.files = e.dataTransfer.files;
-                    handleFileSelection();
+                    handleFileSelect({ target: fileInput });
+                }
+            });
+        }
+        
+        // 显示/隐藏加载动画
+        function setLoadingState(loading) {
+            if (loading) {
+                loadingSpinner.classList.remove('hidden');
+                generateBtn.disabled = true;
+                generateBtn.textContent = '处理中...';
+            } else {
+                loadingSpinner.classList.add('hidden');
+                generateBtn.disabled = false;
+                generateBtn.textContent = '生成软著材料';
+            }
+        }
+        
+        // 处理文件选择
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // 检查文件类型
+            const allowedExtensions = ['.docx', '.txt', '.md'];
+            const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+            
+            if (!allowedExtensions.includes(fileExt)) {
+                alert('请选择.docx、.txt或.md格式的文件');
+                event.target.value = '';
+                return;
+            }
+            
+            // 显示文件信息
+            fileInfo.textContent = `已选择: ${file.name} (${formatFileSize(file.size)})`;
+            
+            // 显示加载状态
+            setLoadingState(true);
+            infoReview.innerHTML = '<p>正在分析文档...</p>';
+            
+            try {
+                const ext = file.name.split('.').pop().toLowerCase();
+                let fileContent;
+                
+                if (ext === 'docx') {
+                    fileContent = await readFileAsArrayBuffer(file);
+                } else if (ext === 'txt' || ext === 'md') {
+                    fileContent = await readFileAsText(file);
+                } else {
+                    throw new Error('不支持的文件格式');
+                }
+                
+                // 通过IPC调用主进程的文档分析
+                const result = await window.electronAPI.analyzeDocument(fileContent, file.name);
+                
+                if (result.success) {
+                    aiResponseData = result.data;
+                    showReviewForm(aiResponseData);
+                } else {
+                    throw new Error(result.error || '文档分析失败');
+                }
+            } catch (error) {
+                console.error('文件处理错误:', error);
+                alert('发生错误: ' + error.message);
+            } finally {
+                setLoadingState(false);
+            }
+        }
+        
+        // 显示审核表单
+        function showReviewForm(data) {
+            // 确保数据结构正确
+            const mainTable = data.mainTable || {};
+            const confirmationTable = data.confirmationTable || {};
+            
+            // 存储主表数据供后续使用
+            window.mainTableData = mainTable;
+            userConfirmedData = { ...confirmationTable };
+            
+            let html = `
+                <h2>请确认以下信息</h2>
+                <div class="tabs">
+                    <button class="tab-btn" onclick="showTab('mainTab')">已提取信息</button>
+                    <button class="tab-btn active" onclick="showTab('confirmTab')">待确认信息</button>
+                </div>
+
+                <div id="mainTab" class="tab-content">
+                    <h3>已提取的信息</h3>
+                    <table class="review-table">
+                        <tr><th>字段</th><th>值</th><th>状态</th></tr>
+            `;
+            
+            // 显示主表信息（已确认的）
+            Object.entries(mainTable).forEach(([key, value]) => {
+                if (value !== null && value !== '') {
+                    html += `
+                        <tr>
+                            <td>${key}</td>
+                            <td>${value}</td>
+                            <td>✅ 已确认</td>
+                        </tr>
+                    `;
                 }
             });
             
-            // 文件选择处理
-            fileInput.addEventListener('change', handleFileSelection);
+            html += `</table></div>
+                <div id="confirmTab" class="tab-content active">
+                    <h3>请确认或补充以下信息</h3>
+                    <form id="reviewForm">
+                    <table class="review-table">
+                        <tr><th>字段</th><th>当前值/建议值</th><th>请输入确认值</th></tr>
+            `;
             
-            async function handleFileSelection() {
-                if (fileInput.files.length) {
-                    const file = fileInput.files[0];
-                    fileInfo.textContent = `已选择: ${file.name} (${formatFileSize(file.size)})`;
-                    
-                    // 显示加载动画
-                    loadingSpinner.classList.remove('hidden');
-                    
-                    const ext = file.name.split('.').pop().toLowerCase(); // 获取文件扩展名
-                    let fileContent;
-                    
-                    try {
-                        if (ext === 'docx') {
-                            // 读取为ArrayBuffer
-                            fileContent = await readFileAsArrayBuffer(file);
-                        } else if (ext === 'txt' || ext === 'md') {
-                            // 读取为文本
-                            fileContent = await readFileAsText(file);
-                        } else {
-                            throw new Error('不支持的文件格式');
-                        }
-                        
-                        // 通过IPC调用主进程的文档分析
-                        const result = await window.electronAPI.analyzeDocument(fileContent, file.name);
-                        loadingSpinner.classList.add('hidden'); // 隐藏加载动画
-                        
-                        if (result.success) {
-                            aiResponseData = result.data; // 存储整个AI响应
-                            
-                            // 确保数据结构正确
-                            if (aiResponseData && aiResponseData.confirmationTable) {
-                                displayReviewTable(aiResponseData.confirmationTable); // 显示确认表部分
-                                infoReview.style.display = 'block'; // 显示信息确认区域
-                            } else {
-                                throw new Error('AI返回的数据结构不正确，缺少confirmationTable');
-                            }
-                        } else {
-                            alert('文档分析失败: ' + result.error);
-                        }
-                    } catch (error) {
-                        loadingSpinner.classList.add('hidden');
-                        console.error('文件处理错误:', error);
-                        alert('发生错误: ' + error.message);
-                    }
-                }
-            }
-            
-            // 辅助函数：读取文件为文本
-            function readFileAsText(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve(e.target.result);
-                    reader.onerror = () => reject(new Error('读取文件失败'));
-                    reader.readAsText(file);
-                });
-            }
-
-            // 辅助函数：读取文件为ArrayBuffer
-            function readFileAsArrayBuffer(file) {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve(e.target.result); // e.target.result 是 ArrayBuffer
-                    reader.onerror = () => reject(new Error('读取文件失败'));
-                    reader.readAsArrayBuffer(file);
-                });
-            }
-
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-            
-            // 显示确认表格
-            function displayReviewTable(confirmationTable) {
-                reviewTableBody.innerHTML = ''; // 清空表格
-                userConfirmedData = { ...confirmationTable }; // 初始化用户确认数据为确认表的副本
-                
-                for (const [key, value] of Object.entries(confirmationTable)) {
-                    const row = document.createElement('tr');
-                    
-                    // 创建信息类型单元格
-                    const typeCell = document.createElement('td');
-                    typeCell.textContent = key;
-                    
-                    // 创建内容单元格
-                    const contentCell = document.createElement('td');
-                    contentCell.textContent = value;
-                    contentCell.id = `content-${key}`;
-                    
-                    // 创建操作单元格
-                    const actionCell = document.createElement('td');
-                    const editButton = document.createElement('button');
-                    editButton.textContent = '编辑';
-                    editButton.onclick = () => editField(key);
-                    actionCell.appendChild(editButton);
-                    
-                    // 组装行
-                    row.appendChild(typeCell);
-                    row.appendChild(contentCell);
-                    row.appendChild(actionCell);
-                    
-                    reviewTableBody.appendChild(row);
-                }
-            }
-
-            // 编辑字段函数
-            window.editField = function(key) {
-                const contentCell = document.getElementById(`content-${key}`);
-                const currentValue = userConfirmedData[key];
-                
-                // 创建编辑界面
-                const editContainer = document.createElement('div');
-                
-                const inputField = document.createElement('input');
-                inputField.type = 'text';
-                inputField.value = currentValue;
-                inputField.className = 'edit-input';
-                
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = 'edit-buttons';
-                
-                const saveButton = document.createElement('button');
-                saveButton.textContent = '保存';
-                saveButton.className = 'btn';
-                
-                const cancelButton = document.createElement('button');
-                cancelButton.textContent = '取消';
-                cancelButton.className = 'btn';
-                
-                // 添加事件处理
-                saveButton.onclick = function() {
-                    userConfirmedData[key] = inputField.value;
-                    contentCell.textContent = inputField.value;
-                    contentCell.innerHTML = ''; // 清除编辑界面
-                    contentCell.textContent = inputField.value;
-                    
-                    // 重新添加编辑按钮
-                    const newEditButton = document.createElement('button');
-                    newEditButton.textContent = '编辑';
-                    newEditButton.onclick = () => editField(key);
-                    contentCell.parentNode.querySelector('td:last-child').innerHTML = '';
-                    contentCell.parentNode.querySelector('td:last-child').appendChild(newEditButton);
-                };
-                
-                cancelButton.onclick = function() {
-                    contentCell.innerHTML = ''; // 清除编辑界面
-                    contentCell.textContent = currentValue;
-                    
-                    // 重新添加编辑按钮
-                    const newEditButton = document.createElement('button');
-                    newEditButton.textContent = '编辑';
-                    newEditButton.onclick = () => editField(key);
-                    contentCell.parentNode.querySelector('td:last-child').innerHTML = '';
-                    contentCell.parentNode.querySelector('td:last-child').appendChild(newEditButton);
-                };
-                
-                // 组装编辑界面
-                buttonContainer.appendChild(saveButton);
-                buttonContainer.appendChild(cancelButton);
-                editContainer.appendChild(inputField);
-                editContainer.appendChild(buttonContainer);
-                
-                // 替换内容单元格内容
-                contentCell.innerHTML = '';
-                contentCell.appendChild(editContainer);
-                
-                // 聚焦输入框
-                inputField.focus();
-            };
-
-            generateBtn.addEventListener('click', function() {
-                alert('生成功能将在完整版本中实现！');
+            // 显示待确认表信息
+            Object.entries(confirmationTable).forEach(([key, value]) => {
+                const defaultValue = value === null ? '' : value;
+                html += `
+                    <tr>
+                        <td>${key}</td>
+                        <td>${defaultValue || '（需补充）'}</td>
+                        <td><input type="text" class="edit-input" id="confirm_${key}" value="${defaultValue}" /></td>
+                    </tr>
+                `;
             });
             
-            confirmBtn.addEventListener('click', async function() {
-                // 遍历userConfirmedData，覆盖到aiResponseData.mainTable的相应字段
-                for (const key in userConfirmedData) {
-                    if (aiResponseData.mainTable.hasOwnProperty(key)) {
-                        aiResponseData.mainTable[key] = userConfirmedData[key];
-                    }
-                }
+            html += `</table>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button type="button" class="btn btn-success" onclick="confirmInfo()">确认信息</button>
+                    </div>
+                    </form>
+                </div>`;
+            
+            infoReview.innerHTML = html;
+            infoReview.style.display = 'block';
+            generateBtn.disabled = false;
+        }
+        
+        // 标签切换功能
+        function showTab(tabId) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 取消所有标签按钮的激活状态
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 显示选中的标签
+            document.getElementById(tabId).classList.add('active');
+            
+            // 激活对应的按钮
+            document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+        }
+        
+        // 确认信息
+        async function confirmInfo() {
+            try {
+                // 收集确认后的数据
+                const confirmedData = collectFormData();
                 
-                // 调用主进程保存最终主表（用于调试）
-                const saveResult = await window.electronAPI.saveFinalMainTable(aiResponseData.mainTable);
+                // 合并到主表
+                const finalData = {
+                    ...window.mainTableData,
+                    ...confirmedData
+                };
+                
+                // 调用主进程保存最终主表
+                const saveResult = await window.electronAPI.saveFinalMainTable(finalData);
                 
                 if (saveResult.success) {
-                    alert('信息已确认！主表已更新并保存。');
-                    infoReview.style.display = 'none'; // 隐藏确认区域
-                    generateBtn.disabled = false; // 启用生成按钮
+                    alert('信息已确认！现在可以建立文档了。');
+                    // 隐藏确认区域，只显示生成按钮
+                    infoReview.style.display = 'none';
                 } else {
-                    alert('保存失败: ' + saveResult.error);
+                    throw new Error(saveResult.error || '保存失败');
+                }
+            } catch (error) {
+                console.error('确认信息错误:', error);
+                alert('确认信息时出错: ' + error.message);
+            }
+        }
+        
+        // 从表单中收集用户输入的数据
+        function collectFormData() {
+            const form = document.getElementById('reviewForm');
+            const inputs = form.querySelectorAll('input');
+            const confirmedData = {};
+            
+            inputs.forEach(input => {
+                const fieldName = input.id.replace('confirm_', '');
+                confirmedData[fieldName] = input.value;
+            });
+            
+            return confirmedData;
+        }
+        
+        // 生成文档函数
+        async function generateDocuments() {
+        setLoadingState(true);
+        try {
+            // 收集确认后的数据
+            const confirmedData = collectFormData();
+            // 合并到主表
+            const finalData = {
+            ...window.mainTableData,
+            ...confirmedData
+            };
+            
+            // 保存原始内容引用（假设您已经保存了原始文件内容）
+            const originalContent = window.originalContent; // 您需要在文件上传时保存这个值
+            
+            // 调用主进程生成所有文档
+            const result = await window.electronAPI.generateAllDocuments(finalData, originalContent);
+            
+            if (result.success) {
+            const message = `生成成功！\n申请表: ${result.results.applicationTable}\n说明书: ${result.results.manual}`;
+            alert(message);
+            
+            // 显示成功界面
+            showSuccessScreen(result.results);
+            } else {
+            alert('生成失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('生成失败：' + error.message);
+        } finally {
+            setLoadingState(false);
+        }
+        }
+
+        // 显示成功界面
+        function showSuccessScreen(filePaths) {
+            const html = `
+                <h2>生成完成！</h2>
+                <p>以下文档已成功建立：</p>
+                <ul>
+                    <li>软件著作权申请表: ${filePaths.applicationTable}</li>
+                    <li>软件操作说明书: ${filePaths.manual}</li>
+                </ul>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn" id="openFolderBtn">
+                        打开文件所在文件夹
+                    </button>
+                </div>
+            `;
+            document.getElementById('infoReview').innerHTML = html;
+            document.getElementById('infoReview').style.display = 'block';
+
+            // 添加事件监听器到按钮
+            document.getElementById('openFolderBtn').addEventListener('click', async () => {
+                try {
+                    const result = await window.electronAPI.openFileLocation(filePaths.applicationTable);
+                    if (!result.success) {
+                        alert('打开文件夹失败: ' + result.error);
+                    }
+                } catch (error) {
+                    console.error('Error opening folder:', error);
+                    alert('打开文件夹时出错: ' + error.message);
                 }
             });
-        });
+        }
+        
+        // 在用户界面上显示完整的主表
+        /*
+        function displayMainTable(data) {
+            let html = `<h2>生成的主表</h2><table class="review-table"><tr><th>字段</th><th>值</th></tr>`;
+            Object.entries(data).forEach(([key, value]) => {
+                html += `<tr><td>${key}</td><td>${value}</td></tr>`;
+            });
+            html += '</table>';
+            infoReview.innerHTML = html;
+            infoReview.style.display = 'block';
+        }
+            */
+        
+        // 辅助函数：读取文件为文本
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsText(file);
+            });
+        }
+        
+        // 辅助函数：读取文件为ArrayBuffer
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // 辅助函数：格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
     </script>
 </body>
 </html>

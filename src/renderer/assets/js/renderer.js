@@ -161,28 +161,29 @@ function displayMainTable(data) {
 
 // 生成文档函数
 async function generateDocuments() {
-    setLoadingState(true);
-
-    try {
-        // 收集确认后的数据
-        const confirmedData = collectFormData();
-        
-        // 合并到主表
-        const finalData = {
-            ...window.mainTableData,
-            ...confirmedData
-        };
-        
-        displayMainTable(finalData);
-        alert('生成完成！最终信息表已显示。');
-        
-        // 存储最终数据供后续使用
-        window.finalData = finalData;
-    } catch (error) {
-        alert('生成失败：' + error.message);
-    } finally {
-        setLoadingState(false);
+  setLoadingState(true);
+  try {
+    // 收集确认后的数据
+    const confirmedData = collectFormData();
+    // 合并到主表
+    const finalData = {
+      ...window.mainTableData,
+      ...confirmedData
+    };
+    
+    // 调用主进程生成文档
+    const result = await window.electronAPI.generateDocument(finalData);
+    if (result.success) {
+      alert(`生成成功！文档已保存到: ${result.path}`);
+      displayMainTable(finalData);
+    } else {
+      alert('生成失败: ' + result.error);
     }
+  } catch (error) {
+    alert('生成失败：' + error.message);
+  } finally {
+    setLoadingState(false);
+  }
 }
 
 
